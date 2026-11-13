@@ -2,10 +2,13 @@ package com.vanitas.stickers
 
 import android.content.ContentProvider
 import android.content.ContentValues
+import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileNotFoundException
 
@@ -13,18 +16,11 @@ import java.io.FileNotFoundException
 class StickerContentProvider : ContentProvider() {
     override fun onCreate() = true
 
-    override fun query(
-        uri: Uri,
-        projection: Array<out String>?,
-        selection: String?,
-        selectionArgs: Array<out String>?,
-        sortOrder: String?
-    ): Cursor {
+    override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor {
         val columns = projection?.toTypedArray() ?: if (uri.pathSegments.firstOrNull() == "metadata") META_COLUMNS else STICKER_COLUMNS
         val cursor = MatrixCursor(columns)
         val ctx = context ?: return cursor
-        val packs = ctx.getSharedPreferences("sticker_packs", android.content.Context.MODE_PRIVATE)
-            .getString("packs", "[]")?.let(::orgJsonArray) ?: return cursor
+        val packs = JSONArray(ctx.getSharedPreferences("sticker_packs", Context.MODE_PRIVATE).getString("packs", "[]") ?: "[]")
         when (uri.pathSegments.firstOrNull()) {
             "metadata" -> for (i in 0 until packs.length()) {
                 val pack = packs.optJSONObject(i) ?: continue
@@ -45,7 +41,7 @@ class StickerContentProvider : ContentProvider() {
                 val pack = (0 until packs.length()).mapNotNull { packs.optJSONObject(it) }.firstOrNull { it.optString("id") == packId }
                 if (pack != null) {
                     val dir = File(ctx.filesDir, "sticker_packs/$packId")
-                    val metadata = File(dir, "metadata.json").takeIf { it.isFile }?.readText()?.let(::orgJsonObject)
+                    val metadata = File(dir, "metadata.json").takeIf { it.isFile }?.readText()?.let(::JSONObject)
                     val stickers = metadata?.optJSONArray("stickers")
                     if (stickers != null) for (i in 0 until stickers.length()) {
                         val sticker = stickers.optJSONObject(i) ?: continue
@@ -89,6 +85,3 @@ class StickerContentProvider : ContentProvider() {
         private val STICKER_COLUMNS = arrayOf("image", "emojis")
     }
 }
-
-private fun orgJsonArray(text: String) = org.json.JSONArray(text)
-private fun orgJsonObject(text: String) = org.json.JSONObject(text)

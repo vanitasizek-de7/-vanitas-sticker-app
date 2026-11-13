@@ -1,6 +1,5 @@
 package com.vanitas.stickers
 
-import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -14,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -121,7 +121,6 @@ class MainActivity : ComponentActivity() {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Violet)
                         }
                     }
-
                     Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Panel), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("حوّل لحظاتك إلى ملصقات", fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -133,7 +132,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         Column {
                             Text("حزمتك الجديدة", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -144,10 +142,8 @@ class MainActivity : ComponentActivity() {
                             Text(" مسح", color = Color(0xFFB7A8E9))
                         }
                     }
-
                     OutlinedTextField(value = packName, onValueChange = { packName = it.take(32) }, label = { Text("اسم الحزمة") }, placeholder = { Text("مثال: لحظات فانيـتاس") }, singleLine = true, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = publisher, onValueChange = { publisher = it.take(32) }, label = { Text("اسم الناشر") }, singleLine = true, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth())
-
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         Text("معاينة الملصقات  ·  ${selected.size}/30", color = Color(0xFFDCE0EA), fontWeight = FontWeight.SemiBold)
                         TextButton(onClick = { picker.launch("image/*") }) {
@@ -155,7 +151,6 @@ class MainActivity : ComponentActivity() {
                             Text(" إضافة صور", color = Mint)
                         }
                     }
-
                     if (selected.isEmpty()) {
                         Card(onClick = { picker.launch("image/*") }, shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Panel), modifier = Modifier.fillMaxWidth().weight(1f)) {
                             Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -169,9 +164,7 @@ class MainActivity : ComponentActivity() {
                         }
                     } else {
                         LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            itemsIndexed(selected) { index, uri ->
-                                StickerPreview(uri, index) { selected.remove(uri) }
-                            }
+                            itemsIndexed(selected) { index, uri -> StickerPreview(uri, index) { selected.remove(uri) } }
                             item {
                                 Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(Panel).border(1.dp, Violet.copy(alpha = .35f), RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) {
                                     TextButton(onClick = { picker.launch("image/*") }) { Icon(Icons.Default.Add, null, tint = Mint) }
@@ -179,15 +172,16 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-
                     Button(
                         onClick = {
                             if (selected.isEmpty()) { toast("أضف صورة واحدة على الأقل"); return@Button }
                             if (packName.isBlank()) { toast("اكتب اسم الحزمة أولاً"); return@Button }
                             busy = true
                             val images = selected.toList()
+                            val name = packName.trim()
+                            val author = publisher.trim().ifBlank { "VANITAS STUDIO" }
                             scope.launch {
-                                val result = withContext(Dispatchers.IO) { createPack(images, packName.trim(), publisher.trim().ifBlank { "VANITAS STUDIO" }) }
+                                val result = withContext(Dispatchers.IO) { createPack(images, name, author) }
                                 busy = false
                                 result.fold(::addPackToWhatsApp) { toast("تعذر تجهيز الحزمة: ${it.message ?: "خطأ غير معروف"}") }
                             }
@@ -216,11 +210,9 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun StickerPreview(uri: Uri, index: Int, onRemove: () -> Unit) {
-        val bitmap = remember(uri) {
-            runCatching { contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }.getOrNull()
-        }
+        val bitmap = remember(uri) { runCatching { contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }.getOrNull() }
         Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(Panel)) {
-            if (bitmap != null) androidx.compose.foundation.Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
+            if (bitmap != null) Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
             else Icon(Icons.Default.Image, null, tint = Color.Gray, modifier = Modifier.align(Alignment.Center))
             Text("${index + 1}", color = Color.White, fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).clip(CircleShape).background(Color(0xBB090B10)).padding(horizontal = 8.dp, vertical = 4.dp))
             TextButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).size(34.dp)) { Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(17.dp)) }
@@ -228,29 +220,26 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun createPack(uris: List<Uri>, name: String, publisher: String): Result<String> = runCatching {
+        require(uris.size >= 3) { "تحتاج حزمة واتساب إلى 3 ملصقات على الأقل" }
+        require(uris.size <= 30) { "الحد الأقصى 30 ملصقًا للحزمة" }
         val id = "vanitas_${UUID.randomUUID().toString().replace("-", "").take(12)}"
         val packDir = File(filesDir, "sticker_packs/$id").apply { mkdirs() }
         val stickers = JSONArray()
         uris.forEachIndexed { index, uri ->
-            val source = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-                ?: error("تعذرت قراءة الصورة ${index + 1}")
+            val source = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: error("تعذرت قراءة الصورة ${index + 1}")
             val stickerFile = File(packDir, "sticker_$index.webp")
             writeSticker(source, stickerFile, 512)
             source.recycle()
+            require(stickerFile.length() <= 100 * 1024) { "الملصق ${index + 1} يتجاوز حد 100 كيلوبايت" }
             stickers.put(JSONObject().put("image_file", stickerFile.name).put("emojis", JSONArray().put("✨")))
         }
         val firstBitmap = contentResolver.openInputStream(uris.first())?.use { BitmapFactory.decodeStream(it) } ?: error("تعذرت قراءة صورة الغلاف")
         writeSticker(firstBitmap, File(packDir, "tray.webp"), 96)
         firstBitmap.recycle()
         val metadata = JSONObject()
-            .put("identifier", id)
-            .put("name", name)
-            .put("publisher", publisher)
-            .put("tray_image", "tray.webp")
-            .put("image_data_version", "1")
-            .put("avoid_cache", true)
-            .put("animated_sticker_pack", false)
-            .put("stickers", stickers)
+            .put("identifier", id).put("name", name).put("publisher", publisher)
+            .put("tray_image", "tray.webp").put("image_data_version", "1")
+            .put("avoid_cache", true).put("animated_sticker_pack", false).put("stickers", stickers)
         File(packDir, "metadata.json").writeText(metadata.toString())
         val prefs = getSharedPreferences("sticker_packs", MODE_PRIVATE)
         val packs = JSONArray(prefs.getString("packs", "[]"))
@@ -272,28 +261,25 @@ class MainActivity : ComponentActivity() {
         canvas.drawBitmap(source, null, RectF(left, top, left + width, top + height), paint)
         FileOutputStream(destination).use { stream ->
             @Suppress("DEPRECATION")
-            output.compress(Bitmap.CompressFormat.WEBP, 90, stream)
+            output.compress(Bitmap.CompressFormat.WEBP, 80, stream)
         }
         output.recycle()
     }
 
     private fun addPackToWhatsApp(packId: String) {
-        val info = JSONObject(getSharedPreferences("sticker_packs", MODE_PRIVATE).getString("packs", "[]")!!)
-        val pack = (0 until info.length()).map { info.getJSONObject(it) }.firstOrNull { it.getString("id") == packId }
+        val packs = JSONArray(getSharedPreferences("sticker_packs", MODE_PRIVATE).getString("packs", "[]") ?: "[]")
+        val pack = (0 until packs.length()).map { packs.getJSONObject(it) }.firstOrNull { it.getString("id") == packId }
         if (pack == null) { toast("تعذر العثور على الحزمة"); return }
         val intent = Intent("com.whatsapp.intent.action.ENABLE_STICKER_PACK").apply {
             putExtra("sticker_pack_id", packId)
             putExtra("sticker_pack_name", pack.getString("name"))
             putExtra("sticker_pack_authority", "$packageName.stickerprovider")
         }
-        val target = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull { packageName ->
-            intent.setPackage(packageName)
+        val target = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull { targetPackage ->
+            intent.setPackage(targetPackage)
             intent.resolveActivity(packageManager) != null
         }
-        if (target == null) {
-            toast("ثبّت WhatsApp أو WhatsApp Business ثم أعد المحاولة")
-            return
-        }
+        if (target == null) { toast("ثبّت WhatsApp أو WhatsApp Business ثم أعد المحاولة"); return }
         intent.setPackage(target)
         runCatching { startActivity(intent) }.onFailure { toast("لم يتمكن WhatsApp من فتح الحزمة: ${it.message}") }
     }
